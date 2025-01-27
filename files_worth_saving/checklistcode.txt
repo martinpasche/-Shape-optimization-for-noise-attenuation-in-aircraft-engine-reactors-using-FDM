@@ -1,0 +1,23 @@
+Mapping :
+    -Code mapping qui met les couleurs OK 
+    -Code flag qui met les drapeaux OK 
+    -Code BC qui met les conditions aux bords OK
+
+Mapping me semble tout bon (tout du moins sur les exemples simples un peu rectangle)
+
+Code 2 :
+
+à faire : 
+    - pourquoi inverser la matrice ? d'autres méthodes existantes ? lire de la biblio la dessus sur les systèmes avec des matrices creuses 
+    - trouver le soucis dans les fonctions de remplissage, parce que y a un problème de remplissage. problème de remplissage de A, il doit y avoir un coeff en trop ou en moins sur une ligne. 
+        -BC_out c'est OK
+        
+Le problème ne vient pas de la fonction de suppression ni de csr. On a un problème dans le remplissage de la matrice il y a une colonne qui est non nul alors qu'elle devrait l'être 
+
+Le problème vient du coin en bas à droite visiblement
+
+OK C REPARE 
+
+MAIS la matrice est tjr pas inversible 
+
+problème de l'histoire du dirichlet la 

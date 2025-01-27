@@ -1,0 +1,304 @@
+import numpy as np
+import numpy as np
+import matplotlib.pyplot as plt
+import adjoint
+from math import *
+
+
+def norme_infini_ensemble(fonction, x_range, y_range, dx, dy):
+    max_valeur = -float("inf")
+
+    for x in np.arange(x_range[0], x_range[1], dx):
+        for y in np.arange(y_range[0], y_range[1], dy):
+            valeur = fonction(x, y)
+            if abs(valeur) > max_valeur:
+                max_valeur = abs(valeur)
+
+    return max_valeur
+
+
+def norme_L1_ensemble(fonction, x_range, y_range, dx, dy):
+    somme = 0.0
+
+    for x in np.arange(x_range[0], x_range[1], dx):
+        for y in np.arange(y_range[0], y_range[1], dy):
+            somme += abs(fonction(x, y))
+
+    return somme
+
+
+def norme_L2_ensemble(fonction, x_range, y_range, dx, dy):
+    somme_carres = 0.0
+
+    for x in np.arange(x_range[0], x_range[1], dx):
+        for y in np.arange(y_range[0], y_range[1], dy):
+            somme_carres += abs(fonction(x, y)) ** 2
+
+    norme_L2 = np.sqrt(somme_carres)
+    return norme_L2
+
+
+def derivee_x(fonction, dx, x1, y1):
+    return (fonction(x1 + dx, y1) - fonction(x1 - dx, y1)) / (2 * dx)
+
+
+def derivee_y(fonction, dy, x1, y1):
+    return (fonction(x1, y1 + dy) - fonction(x1, y1 - dy)) / (2 * dy)
+
+
+def norme_H1_ensemble(fonction, x_range, y_range, dx, dy):
+    somme_carres = 0.0
+    somme_carres1 = 0.0
+    for x in np.arange(x_range[0], x_range[1], dx):
+        for y in np.arange(y_range[0], y_range[1], dy):
+            somme_carres += (
+                abs(derivee_x(fonction, dx, x, y)) ** 2
+                + abs(derivee_y(fonction, dy, x, y)) ** 2
+            )
+            somme_carres1 += abs(fonction(x, y)) ** 2
+    return np.sqrt(somme_carres1) + np.sqrt(somme_carres)
+
+
+n = 120
+p = 30
+L = 105  # longueur exemple 7 en pixel
+h = 15  # hauteur exemple 7 en pixel
+k = adjoint.k
+
+
+def verification(z=1):
+    dx = adjoint.f_dx(z)
+    dy = adjoint.f_dy(z)
+    x0 = 8*dx
+    x1 = 112*dx
+    y0 = 8*dy
+    y1 = 22*dy
+    # Créez des valeurs pour x et y
+    x = np.linspace(0, n, n)
+    y = np.linspace(0, p, p)
+    X, Y = np.meshgrid(x, y)
+    print(X.shape)
+    # Calculez votre fonction Z(x, y) - vous devez remplacer cette fonction par la vôtre
+    # Exemple : une fonction simple
+    Z = np.zeros((p, n), dtype=complex)
+    condition = (X >= 8) & (X <= (112)) & (Y >= 8) & (Y <= 22)
+    for i in range(0, p):
+        for j in range(0, n):
+            if condition[i, j] == True:
+                Z[i,j] = (X[i,j]*dx-x0)**2*(X[i,j]*dx-x1)*(Y[i,j]*dy-y0)**2*(Y[i,j]*dy-y1)**2
+                
+    # Obtenez la partie réelle et la partie imaginaire de Z
+    Z_real = np.real(Z)
+    Z_imag = np.imag(Z)
+    # Créez une figure avec deux sous-graphiques côte à côte
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Graphique de la partie réelle
+    im1 = ax1.imshow(
+        Z_real,
+        extent=(x.min(), x.max(), y.min(), y.max()),
+        origin="lower",
+        cmap="coolwarm",
+    )
+    ax1.set_title("Partie Réelle test")
+    ax1.set_xlabel("X")
+    ax1.set_ylabel("Y")
+    fig.colorbar(im1, ax=ax1)
+
+    # Graphique de la partie imaginaire
+    im2 = ax2.imshow(
+        Z_imag,
+        extent=(x.min(), x.max(), y.min(), y.max()),
+        origin="lower",
+        cmap="coolwarm",
+    )
+    ax2.set_title("Partie Imaginaire test")
+    ax2.set_xlabel("X")
+    ax2.set_ylabel("Y")
+    fig.colorbar(im2, ax=ax2)
+
+    # Affichez la figure
+    plt.show()
+
+
+# matrice_reacteur = adjoint.Mapping.mapping_BC(
+#     adjoint.Mapping.color_to_flag(adjoint.Mapping.mapping(adjoint.Mapping.png_to_rgb_matrix("exemple7.png")))
+# )
+chi = adjoint.chi
+
+
+def P(x, y, z=1):
+    dx = adjoint.f_dx(z)
+    dy = adjoint.f_dy(z)
+    M = adjoint.matrice_to_csr(
+        adjoint.matrice_reacteur, chi, adjoint.second_membre("exemple7.png", adjoint.fct_test, z), z
+    )
+    u = adjoint.inverse_csr(M[0], M[1])
+    IB = M[2]
+    j = x // dx
+    i = y // dy
+    if (i, j) in IB:
+        return u[IB.index((i, j))]
+    else:
+        return 0
+
+
+def f(x, y, z=1):
+    x0, x1, y0, y1 = +inf, -inf, +inf, -inf
+    matrice_reacteur=adjoint.matrice_reacteur
+    for i in range(matrice_reacteur.shape[0]):
+        for j in range(matrice_reacteur.shape[1]):
+            if "BC" in matrice_reacteur[i,j] and matrice_reacteur[i,j]["BC"] == "in":
+                if j < x0:
+                    x0 = j
+                if i < y0:
+                    y0 = i
+                if i > y1:
+                    y1 = i
+            elif "BC" in matrice_reacteur[i,j] and matrice_reacteur[i,j]["BC"] == "out":
+                if j > x1:
+                    x1 = j
+                if i < y0:
+                    y0 = i
+                if i > y1:
+                    y1 = i
+              
+    x0 = x0 * adjoint.f_dx(z)
+    x1 = x1 * adjoint.f_dx(z)
+    y0 = (y0-1) * adjoint.f_dy(z)
+    y1 = (y1+1) * adjoint.f_dy(z)
+    return P(x, y, z) - (x-x0)**2*(x-x1)*(y-y0)**2*(y-y1)**2
+
+verification(1)
+
+# L1_max, L2_max, H1_max = 0, 0, 0
+# INF=[]
+# L1=[]
+# L2=[]
+# H1=[]
+
+
+
+
+# for r in range(3):
+    
+#     z = [0.5, 1, 2][r]
+#     fichier = ["exemple7 divise 2.png", "exemple7.png", "exemple7 fois 2.png"][r]
+#     matrice_reacteur = adjoint.Mapping.mapping_BC(adjoint.Mapping.color_to_flag(adjoint.Mapping.mapping(adjoint.Mapping.png_to_rgb_matrix(fichier))))
+#     n,p=matrice_reacteur.shape
+#     dx=adjoint.f_dx(z)
+#     dy=adjoint.f_dy(z)
+#     M=adjoint.matrice_to_csr(matrice_reacteur, chi, adjoint.second_membre(matrice_reacteur,adjoint.fct_test,z),z)
+#     u=adjoint.inverse_csr(M[0],M[1])
+#     IB=M[2]
+#     x_range=[0,n*dx]
+#     y_range=[0,p*dy]
+    
+#     # x0, x1, y0, y1 = +inf, -inf, +inf, -inf
+
+#     # for i in range(matrice_reacteur.shape[0]):
+#     #     for j in range(matrice_reacteur.shape[1]):
+#     #         if "BC" in matrice_reacteur[i,j] and matrice_reacteur[i,j]["BC"] == "in":
+#     #             if j < x0:
+#     #                 x0 = j
+#     #             if i < y0:
+#     #                 y0 = i
+#     #             if i > y1:
+#     #                 y1 = i
+#     #         elif "BC" in matrice_reacteur[i,j] and matrice_reacteur[i,j]["BC"] == "out":
+#     #             if j > x1:
+#     #                 x1 = j
+#     #             if i < y0:
+#     #                 y0 = i
+#     #             if i > y1:
+#     #                 y1 = i
+#     x0=[4,8,16][r]
+#     x1=[56,112,224][r]
+#     y0=[4,8,16][r]
+#     y1=[11,22,44][r]
+              
+#     x0 = x0 * dx
+#     x1 = x1 * dx
+#     y0 = (y0-1) * dy
+#     y1 = (y1+1) * dy
+#     print('x0,x1...')
+#     # data = np.zeros((p, p))
+
+
+#     max_difference = -float("inf")  #norme infini
+#     somme=0                         #norme L1 **2
+#     somme_carres=0                  #norme L2 **2
+#     somme_carres1=0                 #norme L2 de la dérivée **2
+#     f_reference = []
+#     df_ref=0
+#     print('initialisation')
+#     for x in np.arange(x_range[0], x_range[1], dx):
+#         j=int(x//dx)
+#         for y in np.arange(y_range[0], y_range[1], dy):
+#             i=p-int(y//dy)-1
+#             f_reference.append(abs((x-x0)**2*(x-x1)*(y-y0)**2*(y-y1)**2))
+            
+#             if (i,j) in IB:
+#                 P=u[IB.index((i,j))]
+#                 difference = P - (x-x0)**2*(x-x1)*(y-y0)**2*(y-y1)**2
+#                 somme+=abs(difference)
+#                 somme_carres+=abs(P - (x-x0)**2*(x-x1)*(y-y0)**2*(y-y1)**2)**2
+#                 # data[j,i]=difference
+#             else:
+#                 difference=0
+#                 # data[j,i]=difference
+#             if j>0 and i>0:
+#                     if (i,j+1) in IB and (i,j-1) in IB:
+#                         derivee_x=(u[IB.index((i,j+1))]-(x+dx-x0)**2*(x+dx-x1)*(y-y0)**2*(y-y1)**2-u[IB.index((i,j-1))]+(x-dx-x0)**2*(x-dx-x1)*(y-y0)**2*(y-y1)**2)/(2*dx)
+#                         df_x=(-(x+dx-x0)**2*(x+dx-x1)*(y-y0)**2*(y-y1)**2+(x-dx-x0)**2*(x-dx-x1)*(y-y0)**2*(y-y1)**2)/(2*dx)
+#                     elif (i,j+1) in IB:
+#                         derivee_x= (u[IB.index((i,j+1))]-(x+dx-x0)**2*(x+dx-x1)*(y-y0)**2*(y-y1)**2)/(2*dx)
+#                         df_x=(-(x+dx-x0)**2*(x+dx-x1)*(y-y0)**2*(y-y1)**2)/(2*dx)
+#                     elif (i,j-1) in IB:
+#                         derivee_x= (-u[IB.index((i,j-1))]+(x-dx-x0)**2*(x-dx-x1)*(y-y0)**2*(y-y1)**2)/(2*dx)
+#                         df_x=((x-dx-x0)**2*(x-dx-x1)*(y-y0)**2*(y-y1)**2)/(2*dx)
+#                     else:
+#                         derivee_x=0
+#                         df_x=0
+#                     if (i+1,j) in IB and (i-1,j) in IB:
+#                         derivee_y=(u[IB.index((i-1,j))]-(x-x0)**2*(x-x1)*(y+dy-y0)**2*(y+dy-y1)**2-u[IB.index((i+1,j))]+(x-x0)**2*(x-x1)*(y-dy-y0)**2*(y-dy-y1)**2)/(2*dy)
+#                         df_y=(-(x-x0)**2*(x-x1)*(y+dy-y0)**2*(y+dy-y1)**2+(x-x0)**2*(x-x1)*(y-dy-y0)**2*(y-dy-y1)**2)/(2*dy)
+#                     elif (i+1,j) in IB:
+#                         derivee_y=(-u[IB.index((i+1,j))]+(x-x0)**2*(x-x1)*(y-dy-y0)**2*(y-dy-y1)**2)/(2*dy)
+#                         df_y=((x-x0)**2*(x-x1)*(y-dy-y0)**2*(y-dy-y1)**2)/(2*dy)
+#                     elif (i-1,j) in IB:
+#                         derivee_y=(-(x-x0)**2*(x-x1)*(y+dy-y0)**2*(y+dy-y1)**2+u[IB.index((i-1,j))])/(2*dy)
+#                         df_y=(-(x-x0)**2*(x-x1)*(y+dy-y0)**2*(y+dy-y1)**2)/(2*dy)
+#                     else:
+#                         derivee_y=0
+#                         df_y=0
+#                     somme_carres1+=abs(derivee_x)**2+abs(derivee_y)**2
+#                     df_ref+=abs(df_x)**2+abs(df_y)**2
+
+#             if abs(difference) > max_difference:
+#                 max_difference = abs(difference)
+#             print(i,j)
+#     # print(somme)
+#     # print((sum([el for el in f_reference])))
+#     print('r=',r)
+#     INF.append((max_difference) / max(f_reference))
+#     L1.append(somme / sum(f_reference))
+#     L2.append((np.sqrt(somme_carres)) / np.sqrt(sum([el**2 for el in f_reference])))
+#     H1.append((np.sqrt(somme_carres)+np.sqrt(somme_carres1)) / (np.sqrt(sum([el**2 for el in f_reference]))+np.sqrt(df_ref)))
+
+# plt.scatter(['précision fois 1', "précision fois 2","précision fois 4"] ,L1,color='red',label='norme L1')
+# plt.scatter(['précision fois 1', "précision fois 2","précision fois 4"] ,L2,color='green',label='norme L2')
+# plt.scatter(['précision fois 1', "précision fois 2","précision fois 4"] ,INF,color='black',label='norme infini')
+# plt.scatter(['précision fois 1', "précision fois 2","précision fois 4"], H1,color='blue',label='norme H1')
+# plt.legend()
+# plt.title('normes pour 3 précisions différentes')
+
+# # # Créez une figure avec un seul sous-graphique
+# # fig, ax = plt.subplots()
+
+# # # Affichez les données avec imshow
+# # im = ax.imshow(data, cmap='coolwarm')
+
+# # # Ajoutez une barre de couleur
+# # cbar = plt.colorbar(im)
+# plt.show()
